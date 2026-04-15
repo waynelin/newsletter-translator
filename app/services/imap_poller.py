@@ -127,9 +127,10 @@ async def _poll_once() -> None:
         return
 
     if not uids:
+        logger.debug("Poll cycle complete — inbox empty")
         return
 
-    logger.info("Found %d unseen email(s)", len(uids))
+    logger.info("Poll cycle complete — found %d unseen email(s)", len(uids))
 
     # Fetch translation config
     async with AsyncSessionLocal() as db:
