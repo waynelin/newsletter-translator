@@ -37,4 +37,4 @@ class LogsResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str
-    smtp_running: bool
+    poller_running: bool

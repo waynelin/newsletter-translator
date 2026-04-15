@@ -2,11 +2,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Inbound SMTP server
-    smtp_host: str = "0.0.0.0"
-    smtp_port: int = 8025
+    # Inbound Gmail IMAP
+    imap_host: str = "imap.gmail.com"
+    imap_port: int = 993
+    imap_user: str = "email.translator.2026@gmail.com"
+    imap_password: str = ""          # Gmail App Password (not your regular password)
+    imap_poll_interval: int = 60     # seconds between inbox checks
 
-    # Outbound SMTP relay
+    # Outbound SMTP (for forwarding translated emails)
     smtp_send_host: str = "smtp.gmail.com"
     smtp_send_port: int = 587
     smtp_send_user: str = ""
@@ -16,10 +19,6 @@ class Settings(BaseSettings):
     # Anthropic
     anthropic_api_key: str = ""
     translation_model: str = "claude-haiku-4-5-20251001"
-
-    # Relay address config
-    relay_domain: str = "translate.example.com"
-    relay_token: str = "translate"
 
     # Default destination email
     default_dest_email: str = "wlse66180@gmail.com"
@@ -32,7 +31,7 @@ class Settings(BaseSettings):
 
     @property
     def relay_email(self) -> str:
-        return f"{self.relay_token}@{self.relay_domain}"
+        return self.imap_user
 
 
 settings = Settings()

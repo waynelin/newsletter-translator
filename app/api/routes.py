@@ -79,5 +79,5 @@ async def get_logs(
 
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    from app.smtp.handler import is_smtp_running
-    return HealthResponse(status="ok", smtp_running=is_smtp_running())
+    from app.services.imap_poller import is_poller_running
+    return HealthResponse(status="ok", poller_running=is_poller_running())

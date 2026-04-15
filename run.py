@@ -1,11 +1,10 @@
 """
-Entry point: starts both the FastAPI web server and the aiosmtpd SMTP server.
+Entry point: starts the FastAPI web server and the Gmail IMAP polling loop.
 
 Usage:
     python run.py
 
-Both servers run in the same process. The SMTP controller runs on its own thread
-(aiosmtpd Controller pattern); uvicorn runs on asyncio.
+The IMAP poller runs as a background asyncio task alongside uvicorn.
 """
 
 import asyncio
@@ -17,7 +16,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.database import init_db, AsyncSessionLocal
 from app.models import TranslationConfig
-from app.smtp.handler import start_smtp_controller, stop_smtp_controller
+from app.services.imap_poller import start_poller, stop_poller
 
 logging.basicConfig(
     level=logging.INFO,
@@ -32,7 +31,7 @@ async def seed_default_config() -> None:
         result = await db.execute(select(TranslationConfig).limit(1))
         if result.scalar_one_or_none() is None:
             config = TranslationConfig(
-                token=settings.relay_token,
+                token="default",
                 source_lang="en",
                 target_lang="zh",
                 dest_email=settings.default_dest_email,
@@ -40,7 +39,7 @@ async def seed_default_config() -> None:
             db.add(config)
             await db.commit()
             logger.info(
-                "Seeded default config: relay=%s dest=%s",
+                "Seeded default config: inbox=%s dest=%s",
                 settings.relay_email,
                 settings.default_dest_email,
             )
@@ -55,13 +54,17 @@ async def main() -> None:
     # 2. Seed default config row
     await seed_default_config()
 
-    # 3. Start SMTP controller (runs on its own thread)
-    smtp_controller = start_smtp_controller()
+    # 3. Start IMAP polling loop as a background asyncio task
+    start_poller()
 
     logger.info("Web UI available at http://localhost:%d", settings.app_port)
-    logger.info("Relay email: %s (SMTP port %d)", settings.relay_email, settings.smtp_port)
+    logger.info(
+        "Polling inbox: %s every %ds",
+        settings.imap_user,
+        settings.imap_poll_interval,
+    )
 
-    # 4. Start uvicorn (runs on asyncio event loop until interrupted)
+    # 4. Start uvicorn (runs until interrupted)
     config = uvicorn.Config(
         "app.main:app",
         host="0.0.0.0",
@@ -74,7 +77,7 @@ async def main() -> None:
     try:
         await server.serve()
     finally:
-        stop_smtp_controller()
+        stop_poller()
         logger.info("Shutdown complete")
 
 
