@@ -2,23 +2,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # Inbound SMTP server
-    smtp_host: str = "0.0.0.0"
-    smtp_port: int = 8025
-
-    # Outbound SMTP relay
-    smtp_send_host: str = "smtp.gmail.com"
-    smtp_send_port: int = 587
-    smtp_send_user: str = ""
-    smtp_send_password: str = ""
-    smtp_send_from: str = ""
+    # Mailgun
+    mailgun_api_key: str = ""
+    mailgun_domain: str = "example.com"
+    mailgun_from_addr: str = ""
 
     # Anthropic
     anthropic_api_key: str = ""
-    translation_model: str = "claude-haiku-4-5-20251001"
+    translation_model: str = "claude-sonnet-4-6"
 
-    # Relay address config
-    relay_domain: str = "translate.example.com"
+    # Relay address config (local part of the inbound address configured in Mailgun routing)
     relay_token: str = "translate"
 
     # Default destination email
@@ -32,7 +25,11 @@ class Settings(BaseSettings):
 
     @property
     def relay_email(self) -> str:
-        return f"{self.relay_token}@{self.relay_domain}"
+        return f"{self.relay_token}@{self.mailgun_domain}"
+
+    @property
+    def from_addr(self) -> str:
+        return self.mailgun_from_addr or self.relay_email
 
 
 settings = Settings()
