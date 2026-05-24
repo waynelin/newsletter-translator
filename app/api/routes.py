@@ -22,7 +22,7 @@ async def _get_config(db: AsyncSession) -> TranslationConfig:
         config = TranslationConfig(
             token=settings.relay_token,
             source_lang="en",
-            target_lang="zh",
+            target_lang="zh-tw",
             dest_email=settings.default_dest_email,
         )
         db.add(config)
