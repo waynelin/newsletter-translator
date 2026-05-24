@@ -76,6 +76,11 @@ async def inbound_webhook(
 
     logger.info("Webhook: received email from=%s to=%s", sender, recipient)
 
+    # Ignore emails not addressed to this relay (e.g. obsidian bot emails sharing the route)
+    if settings.relay_email and recipient.lower() != settings.relay_email.lower():
+        logger.info("Ignoring email to %s (expected %s)", recipient, settings.relay_email)
+        return {"status": "ignored"}
+
     config = await _get_config(db)
 
     log = EmailLog(
