@@ -10,6 +10,7 @@ from app.database import AsyncSessionLocal, get_db
 from app.models import TranslationConfig, EmailLog
 from app.schemas import ConfigResponse, ConfigUpdate, LogsResponse, EmailLogItem, HealthResponse
 from app.services import email_processor
+from app.services.email_sender import send_email
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
