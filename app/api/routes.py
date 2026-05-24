@@ -1,13 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+import logging
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.models import TranslationConfig, EmailLog
 from app.schemas import ConfigResponse, ConfigUpdate, LogsResponse, EmailLogItem, HealthResponse
+from app.services import email_processor
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 async def _get_config(db: AsyncSession) -> TranslationConfig:
@@ -16,6 +21,87 @@ async def _get_config(db: AsyncSession) -> TranslationConfig:
     if config is None:
         raise HTTPException(status_code=500, detail="No translation config found")
     return config
+
+
+async def _run_translation(
+    log_id: int,
+    subject: str,
+    from_addr: str,
+    body_plain: str | None,
+    body_html: str | None,
+    dest_email: str,
+    source_lang: str,
+    target_lang: str,
+) -> None:
+    try:
+        result = email_processor.process_email(
+            subject=subject,
+            from_addr=from_addr,
+            body_plain=body_plain,
+            body_html=body_html,
+            dest_email=dest_email,
+            source_lang=source_lang,
+            target_lang=target_lang,
+        )
+        async with AsyncSessionLocal() as db:
+            log = await db.get(EmailLog, log_id)
+            if log:
+                log.status = result["status"]
+                log.input_tokens = result.get("input_tokens")
+                log.output_tokens = result.get("output_tokens")
+                log.cache_read_tokens = result.get("cache_read_tokens")
+                await db.commit()
+    except Exception as exc:
+        logger.exception("Translation failed for log_id=%d: %s", log_id, exc)
+        async with AsyncSessionLocal() as db:
+            log = await db.get(EmailLog, log_id)
+            if log:
+                log.status = "error"
+                log.error_message = str(exc)
+                await db.commit()
+
+
+@router.post("/webhook/inbound")
+async def inbound_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    form = await request.form()
+    sender = str(form.get("sender", ""))
+    recipient = str(form.get("recipient", ""))
+    subject = str(form.get("subject", ""))
+    body_plain = str(form.get("body-plain", "")) or None
+    body_html = str(form.get("body-html", "")) or None
+
+    logger.info("Webhook: received email from=%s to=%s", sender, recipient)
+
+    config = await _get_config(db)
+
+    log = EmailLog(
+        received_at=datetime.now(timezone.utc),
+        from_addr=sender,
+        to_addr=recipient,
+        subject=subject,
+        status="processing",
+    )
+    db.add(log)
+    await db.commit()
+    await db.refresh(log)
+
+    background_tasks.add_task(
+        _run_translation,
+        log_id=log.id,
+        subject=subject,
+        from_addr=sender,
+        body_plain=body_plain,
+        body_html=body_html,
+        dest_email=config.dest_email,
+        source_lang=config.source_lang,
+        target_lang=config.target_lang,
+    )
+
+    return {"status": "accepted"}
 
 
 @router.get("/config", response_model=ConfigResponse)
@@ -79,5 +165,4 @@ async def get_logs(
 
 @router.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
-    from app.smtp.handler import is_smtp_running
-    return HealthResponse(status="ok", smtp_running=is_smtp_running())
+    return HealthResponse(status="ok")
