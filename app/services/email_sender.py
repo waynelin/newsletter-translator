@@ -19,7 +19,7 @@ def send_email(
 ) -> None:
     """Send a translated email via Mailgun. Raises on non-2xx response."""
     data: dict[str, str] = {
-        "from": f"Newsletter Translator <{settings.from_addr}>",
+        "from": f"Translate Bot <{settings.from_addr}>",
         "to": to_addr,
         "subject": subject,
     }
