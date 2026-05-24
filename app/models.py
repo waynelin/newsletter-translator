@@ -26,6 +26,7 @@ class EmailLog(Base):
     __tablename__ = "email_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    message_id: Mapped[str | None] = mapped_column(String(512), unique=True, nullable=True, index=True)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
     from_addr: Mapped[str] = mapped_column(String(255), nullable=False)
     to_addr: Mapped[str] = mapped_column(String(255), nullable=False)

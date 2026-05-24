@@ -91,8 +91,9 @@ async def inbound_webhook(
     subject = str(form.get("subject", ""))
     body_plain = str(form.get("body-plain", "")) or None
     body_html = str(form.get("body-html", "")) or None
+    message_id = str(form.get("Message-Id", "")).strip() or None
 
-    logger.info("Webhook: received email from=%s to=%s", sender, recipient)
+    logger.info("Webhook: received email from=%s to=%s message_id=%s", sender, recipient, message_id)
 
     # Ignore emails not addressed to this relay (e.g. obsidian bot emails sharing the route)
     if settings.relay_email and recipient.lower() != settings.relay_email.lower():
@@ -106,9 +107,17 @@ async def inbound_webhook(
             logger.info("Ignoring email from unauthorized sender %s", sender)
             return {"status": "ignored"}
 
+    # Deduplicate: skip if we've already processed this Message-Id
+    if message_id:
+        existing = await db.execute(select(EmailLog).where(EmailLog.message_id == message_id))
+        if existing.scalar_one_or_none() is not None:
+            logger.info("Duplicate message_id=%s, skipping", message_id)
+            return {"status": "duplicate"}
+
     config = await _get_config(db)
 
     log = EmailLog(
+        message_id=message_id,
         received_at=datetime.now(timezone.utc),
         from_addr=sender,
         to_addr=recipient,
