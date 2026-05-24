@@ -19,7 +19,15 @@ async def _get_config(db: AsyncSession) -> TranslationConfig:
     result = await db.execute(select(TranslationConfig).limit(1))
     config = result.scalar_one_or_none()
     if config is None:
-        raise HTTPException(status_code=500, detail="No translation config found")
+        config = TranslationConfig(
+            token=settings.relay_token,
+            source_lang="en",
+            target_lang="zh",
+            dest_email=settings.default_dest_email,
+        )
+        db.add(config)
+        await db.commit()
+        await db.refresh(config)
     return config
 
 
