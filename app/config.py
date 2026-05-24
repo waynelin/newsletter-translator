@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     translation_model: str = "claude-sonnet-4-6"
 
+    # Comma-separated list of allowed sender addresses (empty = allow all)
+    allowed_senders: str = ""
+
     # Relay address config (local part of the inbound address configured in Mailgun routing)
     relay_token: str = "translate"
 

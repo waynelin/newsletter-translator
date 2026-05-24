@@ -89,6 +89,13 @@ async def inbound_webhook(
         logger.info("Ignoring email to %s (expected %s)", recipient, settings.relay_email)
         return {"status": "ignored"}
 
+    # Sender allowlist
+    if settings.allowed_senders:
+        allowed = {s.strip().lower() for s in settings.allowed_senders.split(",")}
+        if sender.lower() not in allowed:
+            logger.info("Ignoring email from unauthorized sender %s", sender)
+            return {"status": "ignored"}
+
     config = await _get_config(db)
 
     log = EmailLog(
