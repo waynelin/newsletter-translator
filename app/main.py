@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,6 +10,8 @@ from app.api.routes import router
 from app.config import settings
 from app.database import engine, init_db, AsyncSessionLocal
 from app.models import TranslationConfig, EmailLog
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -22,11 +25,13 @@ async def lifespan(app: FastAPI):
 
 async def _migrate_db() -> None:
     """Add columns introduced after initial deployment that create_all won't add."""
-    async with engine.begin() as conn:
-        rows = await conn.execute(text("PRAGMA table_info(email_logs)"))
-        existing_columns = {row[1] for row in rows}
+    async with engine.connect() as conn:
+        result = await conn.execute(text("PRAGMA table_info(email_logs)"))
+        existing_columns = {row[1] for row in result.fetchall()}
+        logger.info("_migrate_db: existing columns = %s", existing_columns)
 
         if "message_id" not in existing_columns:
+            logger.info("_migrate_db: adding message_id column")
             await conn.execute(
                 text("ALTER TABLE email_logs ADD COLUMN message_id VARCHAR(512)")
             )
@@ -36,6 +41,8 @@ async def _migrate_db() -> None:
                     " ON email_logs (message_id)"
                 )
             )
+            await conn.commit()
+            logger.info("_migrate_db: migration complete")
 
 
 async def _mark_stale_processing() -> None:
