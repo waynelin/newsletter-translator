@@ -3,19 +3,31 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.api.routes import router
 from app.config import settings
 from app.database import init_db, AsyncSessionLocal
-from app.models import TranslationConfig
+from app.models import TranslationConfig, EmailLog
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
     await _seed_default_config()
+    await _mark_stale_processing()
     yield
+
+
+async def _mark_stale_processing() -> None:
+    """Mark any 'processing' rows left over from a previous crashed process as 'error'."""
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            update(EmailLog)
+            .where(EmailLog.status == "processing")
+            .values(status="error", error_message="Interrupted by server restart")
+        )
+        await db.commit()
 
 
 async def _seed_default_config() -> None:
