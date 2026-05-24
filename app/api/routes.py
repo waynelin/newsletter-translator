@@ -42,6 +42,15 @@ async def _run_translation(
     target_lang: str,
 ) -> None:
     try:
+        send_email(
+            subject=f"[Translating] {subject}",
+            to_addr=dest_email,
+            body_plain=f"Translation started for:\n\n  {subject}\n\nThe translated version will arrive shortly.",
+        )
+    except Exception:
+        logger.warning("Failed to send translation-started notification for %r", subject)
+
+    try:
         result = email_processor.process_email(
             subject=subject,
             from_addr=from_addr,
