@@ -3,20 +3,39 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 from app.api.routes import router
 from app.config import settings
-from app.database import init_db, AsyncSessionLocal
+from app.database import engine, init_db, AsyncSessionLocal
 from app.models import TranslationConfig, EmailLog
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    await _migrate_db()
     await _seed_default_config()
     await _mark_stale_processing()
     yield
+
+
+async def _migrate_db() -> None:
+    """Add columns introduced after initial deployment that create_all won't add."""
+    async with engine.begin() as conn:
+        rows = await conn.execute(text("PRAGMA table_info(email_logs)"))
+        existing_columns = {row[1] for row in rows}
+
+        if "message_id" not in existing_columns:
+            await conn.execute(
+                text("ALTER TABLE email_logs ADD COLUMN message_id VARCHAR(512)")
+            )
+            await conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ix_email_logs_message_id"
+                    " ON email_logs (message_id)"
+                )
+            )
 
 
 async def _mark_stale_processing() -> None:
